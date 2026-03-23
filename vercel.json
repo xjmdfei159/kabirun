@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    { "source": "/api/auth", "destination": "/api/auth" },
+    { "source": "/api/token", "destination": "/api/token" },
+    { "source": "/api/activities", "destination": "/api/activities" },
+    { "source": "/api/profile", "destination": "/api/profile" },
+    { "source": "/(.*)", "destination": "/public/index.html" }
+  ]
+}

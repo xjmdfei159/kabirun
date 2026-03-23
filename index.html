@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kabi.run</title>
+<link rel="stylesheet" href="/leaflet.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC',sans-serif;background:#f5f5f5;color:#1a1a1a;height:100vh;overflow:hidden}
+/* ── 登录页 ── */
+.login-page{position:fixed;inset:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;z-index:9999}
+.login-card{background:#fff;border:1px solid #e8e8e8;border-radius:16px;padding:32px 40px;text-align:center;max-width:340px;width:90%}
+.strava-btn{width:100%;padding:12px 24px;background:#FC4C02;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.strava-btn:hover{opacity:.85}
+/* ── 加载 ── */
+.loading{position:fixed;inset:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9998}
+.spinner{width:36px;height:36px;border:3px solid #e8e8e8;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* ── 主界面 ── */
+.app{display:flex;height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:#fff;border-right:1px solid #e8e8e8;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.logo{padding:14px 16px 10px;font-size:19px;font-weight:700;letter-spacing:-.5px;color:#1a1a1a;border-bottom:1px solid #f0f0f0}
+.logo span{color:#16a34a}
+.user-bar{padding:10px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:10px}
+.avatar{width:32px;height:32px;border-radius:50%;background:#f0fdf4;object-fit:cover;flex-shrink:0}
+.avatar-placeholder{width:32px;height:32px;border-radius:50%;background:#f0fdf4;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#16a34a;flex-shrink:0}
+.search-wrap{padding:8px 10px;border-bottom:1px solid #f0f0f0}
+.search-wrap input{width:100%;background:#f5f5f5;border:1px solid #e8e8e8;color:#1a1a1a;padding:7px 11px;border-radius:8px;font-size:12px;outline:none}
+.stats-bar{padding:8px 14px;border-bottom:1px solid #f0f0f0;display:flex;gap:16px}
+.sv{font-size:13px;font-weight:600;color:#1a1a1a}.sl{font-size:9px;color:#999;margin-top:1px}
+.run-list{flex:1;overflow-y:auto;padding:6px}
+.run-list::-webkit-scrollbar{width:3px}
+.run-list::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+.ri{padding:10px 11px;border-radius:9px;cursor:pointer;margin-bottom:3px;border:1px solid transparent;transition:background .1s}
+.ri:hover{background:#f5f5f5}
+.ri.active{background:#f0fdf4;border-color:#bbf7d0}
+.ri.csel{background:#eff6ff;border-color:#bfdbfe}
+.rh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.rd{font-size:10px;color:#999}.rt{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:500}
+.rn{font-size:12px;font-weight:500;color:#1a1a1a;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm{display:flex;gap:12px}
+.mv{font-size:11px;font-weight:600;color:#333}.ml{font-size:9px;color:#999}
+.rb{height:2px;background:#f0f0f0;border-radius:1px;margin-top:7px;overflow:hidden}
+.sidebar-footer{padding:10px 14px;border-top:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+/* ── 地图区 ── */
+.map-area{flex:1;position:relative;overflow:hidden}
+#map{width:100%;height:100vh}
+.toolbar{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:1000;background:#fff;border:1px solid #e8e8e8;border-radius:11px;padding:3px;display:flex;gap:2px;white-space:nowrap}
+.tb{padding:6px 12px;border:none;border-radius:8px;background:transparent;color:#999;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px}
+.tb.active{background:#f0f0f0;color:#1a1a1a}
+.info-card{position:absolute;top:14px;right:14px;z-index:1000;background:#fff;border:1px solid #e8e8e8;border-radius:13px;padding:13px 15px;min-width:200px;display:none}
+.ic-lbl{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.ic-name{font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:10px;line-height:1.3}
+.ic-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.isv{font-size:14px;font-weight:700}.isl{font-size:9px;color:#999;margin-top:1px}
+.hm-leg{position:absolute;bottom:40px;right:14px;z-index:1000;background:#fff;border:1px solid #e8e8e8;border-radius:9px;padding:9px 12px;display:none}
+.hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;background:#fff;border:1px solid #e8e8e8;border-radius:9px;padding:8px 18px;font-size:12px;color:#666;white-space:nowrap;display:none}
+/* ── 时间轴 ── */
+.timeline-full{position:absolute;inset:0;background:#f5f5f5;overflow-y:auto;z-index:10;display:none;padding:20px}
+.tl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;max-width:900px;margin:0 auto}
+.tl-card{background:#fff;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s;aspect-ratio:1}
+.tl-card:hover{border-color:#aaa}
+.tl-card canvas{display:block;width:100%;height:100%}
+/* ── 对比面板 ── */
+.cp{width:300px;flex-shrink:0;background:#fff;border-left:1px solid #e8e8e8;display:none;flex-direction:column;height:100vh;overflow-y:auto}
+.cp-hdr{padding:11px 14px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+/* ── 统计页 ── */
+.stats-full{position:absolute;inset:0;background:#f5f5f5;padding:20px;overflow-y:auto;z-index:10;display:none}
+.si{max-width:860px;margin:0 auto}
+.sc{background:#fff;border:1px solid #e8e8e8;border-radius:11px;padding:14px 16px;margin-bottom:14px}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.sk{background:#fff;border:1px solid #e8e8e8;border-radius:11px;padding:12px 14px}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+/* ── 分享横幅 ── */
+.share-bar{padding:8px 14px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;font-size:12px;color:#15803d;display:none;align-items:center;justify-content:space-between}
+</style>
+</head>
+<body>
+
+<!-- 登录页 -->
+<div class="login-page" id="loginPage">
+  <div style="text-align:center">
+    <div style="font-size:32px;font-weight:700;letter-spacing:-1px;color:#1a1a1a;margin-bottom:6px"><span style="color:#16a34a">kabi</span>.run</div>
+    <div style="font-size:13px;color:#999">你的 Strava 跑步地图</div>
+  </div>
+  <div class="login-card">
+    <div style="font-size:28px;margin-bottom:14px">🗺️</div>
+    <div style="font-size:14px;color:#888;margin-bottom:6px;line-height:1.6">连接 Strava，生成你的专属跑步地图</div>
+    <div style="font-size:12px;color:#bbb;margin-bottom:24px">登录后获得专属链接 kabi.run/你的用户名</div>
+    <button class="strava-btn" onclick="startAuth()">用 Strava 登录</button>
+  </div>
+</div>
+
+<!-- 加载中 -->
+<div class="loading" id="loadingPage" style="display:none">
+  <div style="font-size:22px;font-weight:700;color:#1a1a1a"><span style="color:#16a34a">kabi</span>.run</div>
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:#999" id="loadingMsg">正在加载...</div>
+</div>
+
+<!-- 主界面 -->
+<div class="app" id="mainApp" style="display:none">
+  <div class="sidebar">
+    <div class="logo"><span>kabi</span>.run</div>
+    <div class="share-bar" id="shareBar">
+      <span id="shareUrl"></span>
+      <button onclick="copyShare()" style="background:none;border:none;color:#16a34a;font-size:11px;cursor:pointer;font-weight:500">复制链接</button>
+    </div>
+    <div class="user-bar" id="userBar">
+      <div class="avatar-placeholder" id="avatarEl">?</div>
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#1a1a1a" id="userName">--</div>
+        <div style="font-size:11px;color:#999" id="userHandle">--</div>
+      </div>
+    </div>
+    <div class="search-wrap"><input id="search" placeholder="搜索路线..." oninput="renderList()"></div>
+    <div class="stats-bar">
+      <div><span class="sv" id="td">--</span><span class="sl">总距离</span></div>
+      <div><span class="sv" id="tc">--</span><span class="sl">次数</span></div>
+      <div><span class="sv" id="tt">--</span><span class="sl">总时长</span></div>
+    </div>
+    <div class="run-list" id="rl"></div>
+    <div class="sidebar-footer">
+      <button onclick="loadMore()" id="loadMoreBtn" style="background:none;border:none;color:#999;font-size:11px;cursor:pointer;display:none">↓ 加载更多</button>
+      <button onclick="logout()" style="background:none;border:none;color:#ccc;font-size:11px;cursor:pointer;margin-left:auto" id="logoutBtn">退出登录</button>
+    </div>
+  </div>
+
+  <div class="map-area" id="ma">
+    <div id="map"></div>
+
+    <div class="toolbar">
+      <button class="tb active" onclick="setMode('routes')" id="b-routes">🗺 路线</button>
+      <button class="tb" onclick="setMode('timeline')" id="b-timeline">📅 时间轴</button>
+      <button class="tb" onclick="setMode('heatmap')" id="b-heatmap">🔥 热力图</button>
+      <button class="tb" onclick="setMode('compare')" id="b-compare">⚖ 对比<span id="cbadge" style="display:none;background:#16a34a;color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;margin-left:3px"></span></button>
+      <button class="tb" onclick="setMode('stats')" id="b-stats">📊 统计</button>
+    </div>
+
+    <div class="info-card" id="ic">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div class="ic-lbl" id="ic-type-lbl" style="color:#16a34a">跑步</div>
+          <div class="ic-name" id="ic-n"></div>
+          <div style="font-size:10px;color:#999" id="ic-date"></div>
+        </div>
+        <button onclick="closeIC()" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;line-height:1">✕</button>
+      </div>
+      <div class="ic-grid">
+        <div><div class="isv" id="ic-d"></div><div class="isl">距离</div></div>
+        <div><div class="isv" id="ic-t"></div><div class="isl">用时</div></div>
+        <div><div class="isv" id="ic-p"></div><div class="isl">配速</div></div>
+        <div><div class="isv" id="ic-e"></div><div class="isl">爬升</div></div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;display:flex;gap:8px">
+        <div style="flex:1;background:#f8f8f8;border-radius:7px;padding:7px 10px;text-align:center">
+          <div style="font-size:11px;font-weight:600;color:#1a1a1a" id="ic-speed"></div>
+          <div style="font-size:9px;color:#999;margin-top:1px">均速</div>
+        </div>
+        <div style="flex:1;background:#f8f8f8;border-radius:7px;padding:7px 10px;text-align:center">
+          <div style="font-size:11px;font-weight:600;color:#1a1a1a" id="ic-cal"></div>
+          <div style="font-size:9px;color:#999;margin-top:1px">预估消耗</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hm-leg" id="hml">
+      <div style="font-size:9px;color:#999;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">密度</div>
+      <div style="width:110px;height:7px;border-radius:3px;background:linear-gradient(90deg,#0032ff44,#00c8c8cc,#00ff64e5,#ffdc00,#ff3200)"></div>
+      <div style="display:flex;justify-content:space-between;margin-top:3px"><span style="font-size:8px;color:#bbb">低</span><span style="font-size:8px;color:#bbb">高</span></div>
+    </div>
+
+    <div class="hint" id="hint"></div>
+
+    <!-- 时间轴 -->
+    <div class="timeline-full" id="tlFull">
+      <div style="max-width:900px;margin:0 auto 16px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;color:#999" id="tlCount"></div>
+      </div>
+      <div class="tl-grid" id="tlGrid"></div>
+    </div>
+
+    <!-- 统计页 -->
+    <div class="stats-full" id="sf">
+      <div class="si">
+        <div style="font-size:20px;font-weight:700;color:#1a1a1a;margin-bottom:3px">跑步统计</div>
+        <div style="font-size:12px;color:#999;margin-bottom:16px" id="ssub"></div>
+        <div class="sg" id="sg"></div>
+        <div class="cg">
+          <div class="sc"><div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">月度跑量 (km)</div><div id="mc2"></div></div>
+          <div class="sc"><div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">配速趋势</div><canvas id="pc" width="260" height="90" style="width:100%;height:90px"></canvas></div>
+          <div class="sc"><div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">活动类型</div><div id="tc2"></div></div>
+          <div class="sc"><div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">按星期分布</div><div id="wc"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cp" id="cp">
+    <div class="cp-hdr">
+      <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px">路线对比</span>
+      <button onclick="setMode('routes')" style="background:none;border:none;color:#ccc;font-size:15px;cursor:pointer">✕</button>
+    </div>
+    <div id="cpb"></div>
+  </div>
+</div>
+
+<script src="/leaflet.js"></script>
+<script>
+// ══════════════════════════════════════════
+// ⚙️  配置
+// ══════════════════════════════════════════
+const CLIENT_ID = '180441'   // ← 替换
+const BASE_URL  = window.location.origin
+
+// 从 URL 路径读取当前 username（如 kabi.run/alice → alice）
+const PATH_USERNAME = window.location.pathname.replace(/^\//, '').split('?')[0] || null
+
+// ── 格式化 ────────────────────────────────
+const TC={Run:'#16a34a',Trail:'#d97706',Walk:'#0891b2',Hike:'#65a30d',Ride:'#2563eb',VirtualRide:'#7c3aed',Swim:'#0891b2'}
+const TL={Run:'跑步',Trail:'越野',Walk:'步行',Hike:'徒步',Ride:'骑行',VirtualRide:'虚拟骑行',Swim:'游泳'}
+const clr=t=>TC[t]||'#888', lbl=t=>TL[t]||t
+const fD=m=>(m/1000).toFixed(1)+' km'
+const fT=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;return h?`${h}:${p2(m)}:${p2(ss)}`:`${m}:${p2(ss)}`}
+const fP=s=>{if(!s)return'--';const v=1000/s/60,m=Math.floor(v),ss=Math.round((v-m)*60);return`${m}'${p2(ss)}"`}
+const fDate=d=>{const dt=new Date(d);return`${dt.getMonth()+1}月${dt.getDate()}日`}
+const p2=n=>String(n).padStart(2,'0')
+
+// ── polyline 解码 ─────────────────────────
+function decode(enc){
+  if(!enc)return[]
+  let i=0,lat=0,lng=0,res=[]
+  while(i<enc.length){
+    let b,s=0,r=0;do{b=enc.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5}while(b>=0x20)
+    lat+=r&1?~(r>>1):r>>1;s=0;r=0
+    do{b=enc.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5}while(b>=0x20)
+    lng+=r&1?~(r>>1):r>>1;res.push([lat/1e5,lng/1e5])
+  }
+  return res
+}
+
+// ── OAuth ─────────────────────────────────
+function startAuth(){
+  const params=new URLSearchParams({
+    client_id:CLIENT_ID,
+    redirect_uri:`${BASE_URL}/api/auth`,
+    response_type:'code',
+    approval_prompt:'auto',
+    scope:'activity:read_all'
+  })
+  window.location.href=`https://www.strava.com/oauth/authorize?${params}`
+}
+
+function logout(){
+  localStorage.removeItem('kabi_username')
+  localStorage.removeItem('kabi_activities')
+  location.href='/'
+}
+
+function copyShare(){
+  const url=`${BASE_URL}/${currentUsername}`
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn=document.querySelector('.share-bar button')
+    btn.textContent='已复制！'
+    setTimeout(()=>btn.textContent='复制链接',2000)
+  })
+}
+
+// ── 数据加载 ──────────────────────────────
+let RUNS=[], currentUsername=null, currentPage=1, hasMore=true, isOwner=false
+
+async function loadProfile(username){
+  const res=await fetch(`/api/profile?username=${username}`)
+  if(!res.ok) return null
+  return res.json()
+}
+
+async function loadActivities(username, page=1, refresh=false){
+  const res=await fetch(`/api/activities?username=${username}&page=${page}${refresh?'&refresh=1':''}`)
+  if(!res.ok) return { activities:[], hasMore:false }
+  return res.json()
+}
+
+async function initForUser(username, owner=false){
+  showLoading('正在加载活动数据...')
+  isOwner=owner
+  currentUsername=username
+
+  // 加载用户信息
+  const profile=await loadProfile(username)
+  if(!profile){ showLogin(); return }
+
+  // 显示用户信息
+  document.getElementById('userName').textContent=profile.name||username
+  document.getElementById('userHandle').textContent=`kabi.run/${username}`
+  const av=document.getElementById('avatarEl')
+  if(profile.avatar){
+    av.outerHTML=`<img class="avatar" id="avatarEl" src="${profile.avatar}" alt="">`
+  } else {
+    av.textContent=(profile.name||username)[0].toUpperCase()
+  }
+
+  // 分享栏（仅对 owner 显示）
+  if(owner){
+    const bar=document.getElementById('shareBar')
+    bar.style.display='flex'
+    document.getElementById('shareUrl').textContent=`kabi.run/${username}`
+  }
+
+  // 隐藏退出按钮（非 owner 访问时）
+  document.getElementById('logoutBtn').style.display=owner?'block':'none'
+
+  // 尝试从本地缓存加载
+  let cached=null
+  try{ cached=JSON.parse(localStorage.getItem(`kabi_activities_${username}`)) }catch{}
+  if(cached?.length){ RUNS=cached; initApp(); return }
+
+  // 从 API 加载
+  const data=await loadActivities(username,1)
+  RUNS=data.activities.map(a=>({...a,path:decode(a.polyline)}))
+  hasMore=data.hasMore; currentPage=2
+  try{ localStorage.setItem(`kabi_activities_${username}`, JSON.stringify(RUNS)) }catch{}
+  initApp()
+}
+
+async function loadMore(){
+  if(!hasMore) return
+  const btn=document.getElementById('loadMoreBtn'); btn.textContent='加载中...'
+  const data=await loadActivities(currentUsername,currentPage)
+  const more=data.activities.map(a=>({...a,path:decode(a.polyline)}))
+  RUNS=[...RUNS,...more]; hasMore=data.hasMore; currentPage++
+  try{ localStorage.setItem(`kabi_activities_${currentUsername}`, JSON.stringify(RUNS)) }catch{}
+  updateSummary(); renderList(); renderMap()
+  btn.textContent=hasMore?'↓ 加载更多':'已全部加载'
+  btn.style.display=hasMore?'block':'none'
+}
+
+// ── 页面切换 ──────────────────────────────
+function showLogin(){document.getElementById('loginPage').style.display='flex';document.getElementById('loadingPage').style.display='none';document.getElementById('mainApp').style.display='none'}
+function showLoading(msg=''){document.getElementById('loginPage').style.display='none';document.getElementById('loadingPage').style.display='flex';document.getElementById('mainApp').style.display='none';if(msg)document.getElementById('loadingMsg').textContent=msg}
+function showApp(){document.getElementById('loginPage').style.display='none';document.getElementById('loadingPage').style.display='none';document.getElementById('mainApp').style.display='flex'}
+
+function updateSummary(){
+  document.getElementById('td').textContent=fD(RUNS.reduce((s,r)=>s+r.dist,0))
+  document.getElementById('tc').textContent=RUNS.length+'次'
+  document.getElementById('tt').textContent=fT(RUNS.reduce((s,r)=>s+r.time,0))
+}
+
+function initApp(){
+  showApp(); initMap(); updateSummary(); renderList()
+  if(RUNS.length) renderMap()
+  document.getElementById('loadMoreBtn').style.display=hasMore?'block':'none'
+}
+
+// ── Leaflet 地图 ──────────────────────────
+let map=null, polylines=new Map(), markers=[], heatLayer=null
+
+function initMap(){
+  if(map) return
+  map=L.map('map',{zoomControl:false})
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
+  }).addTo(map)
+  L.control.zoom({position:'bottomright'}).addTo(map)
+  map.setView([35,105],4)
+}
+
+function calcOverlapScore(run,allRuns,gridSize=0.003){
+  if(allRuns.length<=1)return 0
+  const others=allRuns.filter(r=>r.id!==run.id&&r.path?.length)
+  if(!others.length)return 0
+  const grid=new Set(run.path.map(([a,b])=>`${Math.round(a/gridSize)},${Math.round(b/gridSize)}`))
+  let hits=0
+  others.forEach(r=>r.path.forEach(([a,b])=>{ if(grid.has(`${Math.round(a/gridSize)},${Math.round(b/gridSize)}`))hits++ }))
+  return Math.min(1,hits/Math.max(run.path.length,1))
+}
+
+function clrDark(t){return{Run:'#15803d',Trail:'#b45309',Walk:'#0369a1',Hike:'#4d7c0f',Ride:'#1d4ed8',VirtualRide:'#6d28d9'}[t]||'#555'}
+
+function renderMap(){
+  if(!map)return
+  polylines.forEach(p=>map.removeLayer(p));polylines.clear()
+  markers.forEach(m=>map.removeLayer(m));markers=[]
+  if(heatLayer){map.removeLayer(heatLayer);heatLayer=null}
+
+  if(mode==='heatmap'){
+    RUNS.forEach(r=>{if(!r.path?.length)return;const l=L.polyline(r.path,{color:'#888',weight:1,opacity:.15}).addTo(map);polylines.set(r.id,l)})
+    addHeatLayer();return
+  }
+
+  const overlapScores=new Map()
+  if(mode==='routes') RUNS.forEach(r=>overlapScores.set(r.id,calcOverlapScore(r,RUNS)))
+
+  RUNS.forEach(r=>{
+    if(!r.path?.length)return
+    const isSel=selected?.id===r.id,inCmp=compareIds.includes(r.id)
+    const overlap=overlapScores.get(r.id)||0
+    let w,op,color
+    if(mode==='compare'){w=inCmp?5:1.5;op=inCmp?.9:.1;color=clr(r.type)}
+    else{
+      const boost=overlap*2.5
+      w=isSel?6:(2.5+boost); op=isSel?1:Math.min(0.9,0.55+overlap*0.4)
+      color=isSel?clr(r.type):(overlap>0.15?clrDark(r.type):clr(r.type))
+    }
+    if(!isSel&&mode==='routes'){
+      const ol=L.polyline(r.path,{color:'#fff',weight:w+2.5,opacity:op*0.6,lineJoin:'round',lineCap:'round'}).addTo(map)
+      markers.push(ol)
+    }
+    const line=L.polyline(r.path,{color,weight:w,opacity:op,lineJoin:'round',lineCap:'round'})
+    line.on('click',()=>clickRun(r.id));line.addTo(map);polylines.set(r.id,line)
+    const showM=(isSel&&mode==='routes')||(inCmp&&mode==='compare')
+    if(showM&&r.path.length>1){
+      const c=clr(r.type)
+      markers.push(L.circleMarker(r.path[0],{radius:7,color:'#fff',fillColor:c,fillOpacity:1,weight:2}).addTo(map))
+      markers.push(L.circleMarker(r.path[r.path.length-1],{radius:6,color:c,fillColor:'#fff',fillOpacity:1,weight:2.5}).addTo(map))
+    }
+  })
+
+  if(selected&&mode==='routes'){
+    const l=polylines.get(selected.id);if(l)map.flyToBounds(l.getBounds(),{padding:[60,60],duration:.7,maxZoom:16})
+  } else if(mode==='compare'&&compareIds.length===2){
+    const bs=compareIds.map(id=>polylines.get(id)).filter(Boolean).map(l=>l.getBounds())
+    if(bs.length===2)map.flyToBounds(bs[0].extend(bs[1]),{padding:[60,60],duration:.7})
+  } else if(!selected&&RUNS.length){
+    const valid=RUNS.filter(r=>r.path?.length)
+    if(valid.length) map.fitBounds(valid.reduce((acc,r)=>acc.extend(L.polyline(r.path).getBounds()),L.latLngBounds([])),{padding:[40,40],maxZoom:14,animate:false})
+  }
+}
+
+// ── 热力图 ────────────────────────────────
+const PAL=(()=>{const stops=[[0,[0,50,255,0]],[80,[0,180,220,200]],[140,[0,230,100,230]],[190,[255,220,0,255]],[255,[255,40,0,255]]];return Array.from({length:256},(_,i)=>{let lo=stops[0],hi=stops[stops.length-1];for(let j=0;j<stops.length-1;j++)if(i>=stops[j][0]&&i<=stops[j+1][0]){lo=stops[j];hi=stops[j+1];break}const t=lo[0]===hi[0]?0:(i-lo[0])/(hi[0]-lo[0]);return lo[1].map((v,k)=>Math.round(v+(hi[1][k]-v)*t))})})()
+
+function addHeatLayer(){
+  if(heatLayer){map.removeLayer(heatLayer);heatLayer=null}
+  const CL=L.Layer.extend({
+    onAdd(m){this._map=m;const pane=m.getPane('overlayPane');this._el=L.DomUtil.create('canvas','',pane);Object.assign(this._el.style,{position:'absolute',pointerEvents:'none',zIndex:250});m.on('moveend zoomend resize',this._draw,this);this._draw()},
+    onRemove(m){m.off('moveend zoomend resize',this._draw,this);L.DomUtil.remove(this._el)},
+    _draw(){
+      const sz=this._map.getSize(),W=sz.x,H=sz.y,R=14
+      this._el.width=W;this._el.height=H
+      L.DomUtil.setPosition(this._el,this._map.containerPointToLayerPoint([0,0]))
+      const ctx=this._el.getContext('2d');ctx.clearRect(0,0,W,H)
+      const pts=[]
+      RUNS.forEach(r=>{const step=Math.max(1,Math.floor(r.path.length/80));for(let i=0;i<r.path.length;i+=step){const p=this._map.latLngToContainerPoint(r.path[i]);if(p.x>-R&&p.x<W+R&&p.y>-R&&p.y<H+R)pts.push(p)}})
+      if(!pts.length)return
+      const off=document.createElement('canvas');off.width=W;off.height=H;const octx=off.getContext('2d')
+      pts.forEach(({x,y})=>{const g=octx.createRadialGradient(x,y,0,x,y,R);g.addColorStop(0,'rgba(255,255,255,.18)');g.addColorStop(.4,'rgba(255,255,255,.07)');g.addColorStop(1,'rgba(255,255,255,0)');octx.fillStyle=g;octx.beginPath();octx.arc(x,y,R,0,Math.PI*2);octx.fill()})
+      const img=octx.getImageData(0,0,W,H),d=img.data
+      for(let i=0;i<d.length;i+=4){const a=d[i+3];if(a<2)continue;const t=Math.min(255,Math.round(a*3.5));const[r,g,b,pa]=PAL[t];d[i]=r;d[i+1]=g;d[i+2]=b;d[i+3]=Math.round(pa/255*224)}
+      ctx.putImageData(img,0,0)
+    }
+  })
+  heatLayer=new CL();heatLayer.addTo(map)
+}
+
+// ── 时间轴 ────────────────────────────────
+function renderTimeline(){
+  const sorted=[...RUNS].sort((a,b)=>new Date(b.date)-new Date(a.date))
+  document.getElementById('tlCount').textContent=`共 ${sorted.length} 条轨迹，按时间倒序`
+  const grid=document.getElementById('tlGrid')
+  grid.innerHTML=''
+  sorted.forEach(r=>{
+    const card=document.createElement('div')
+    card.className='tl-card'
+    card.title=`${fDate(r.date)} · ${fD(r.dist)}`
+    const cv=document.createElement('canvas')
+    card.appendChild(cv)
+    grid.appendChild(card)
+    // 用 requestAnimationFrame 避免阻塞
+    requestAnimationFrame(()=>drawTrailCard(cv, r))
+    card.onclick=()=>{
+      setMode('routes')
+      clickRun(r.id)
+    }
+  })
+}
+
+function drawTrailCard(canvas, run){
+  const size=canvas.parentElement.clientWidth||120
+  canvas.width=size; canvas.height=size
+  const ctx=canvas.getContext('2d')
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,size,size)
+  if(!run.path?.length)return
+  const pad=size*0.12
+  const lats=run.path.map(p=>p[0]), lngs=run.path.map(p=>p[1])
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats)
+  const minLng=Math.min(...lngs), maxLng=Math.max(...lngs)
+  const dLat=maxLat-minLat||0.001, dLng=maxLng-minLng||0.001
+  const scaleX=(size-pad*2)/dLng, scaleY=(size-pad*2)/dLat
+  const scale=Math.min(scaleX,scaleY)
+  const offX=(size-(dLng*scale))/2, offY=(size-(dLat*scale))/2
+  const toX=lng=>offX+(lng-minLng)*scale
+  const toY=lat=>size-offY-(lat-minLat)*scale
+  ctx.beginPath()
+  run.path.forEach(([lat,lng],i)=>{ i===0?ctx.moveTo(toX(lng),toY(lat)):ctx.lineTo(toX(lng),toY(lat)) })
+  ctx.strokeStyle=clr(run.type); ctx.lineWidth=Math.max(1,size*0.025)
+  ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke()
+}
+
+// ── 应用状态 ──────────────────────────────
+let mode='routes', selected=null, compareIds=[]
+let animFrame=null, animLayer=null
+
+function setMode(m){
+  if(m!=='heatmap'&&heatLayer){map.removeLayer(heatLayer);heatLayer=null}
+  mode=m
+  if(m!=='compare')compareIds=[]
+  if(m!=='routes'){selected=null;document.getElementById('ic').style.display='none';stopAnimation()}
+  document.querySelectorAll('.tb').forEach(b=>b.classList.remove('active'))
+  document.getElementById('b-'+m).classList.add('active')
+  document.getElementById('cp').style.display=m==='compare'?'flex':'none'
+  document.getElementById('sf').style.display=m==='stats'?'block':'none'
+  document.getElementById('tlFull').style.display=m==='timeline'?'block':'none'
+  document.getElementById('hml').style.display=m==='heatmap'?'block':'none'
+  document.getElementById('hint').style.display=m==='compare'?'block':'none'
+  document.getElementById('map').style.visibility=['stats','timeline'].includes(m)?'hidden':'visible'
+  if(m==='compare')document.getElementById('hint').textContent='点击地图上的路线选择对比 · 已选 0/2'
+  if(m==='stats')renderStats()
+  if(m==='timeline')renderTimeline()
+  renderList();renderMap()
+}
+
+function clickRun(id){
+  const r=RUNS.find(x=>x.id===id)
+  if(mode==='compare'){
+    if(compareIds.includes(id))compareIds=compareIds.filter(x=>x!==id)
+    else if(compareIds.length<2)compareIds.push(id)
+    else compareIds=[compareIds[1],id]
+    const b=document.getElementById('cbadge');b.style.display=compareIds.length?'inline':'none';b.textContent=compareIds.length
+    document.getElementById('hint').textContent=`点击地图上的路线选择对比 · 已选 ${compareIds.length}/2`
+    renderList();renderCompare();renderMap()
+  } else {
+    selected=selected?.id===id?null:r
+    renderList();renderMap()
+    if(selected)showIC(selected)
+    else closeIC()
+  }
+}
+
+function closeIC(){
+  document.getElementById('ic').style.display='none'
+  stopAnimation()
+  selected=null; renderList(); renderMap()
+}
+
+// ── 流光动画 ──────────────────────────────
+function startTrailAnimation(r,color){
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null}
+  if(animLayer){map.removeLayer(animLayer);animLayer=null}
+  if(!r.path||r.path.length<2)return
+  const path=r.path, total=path.length
+  let progress=0; const TAIL=0.12, SPEED=0.004
+  const AnimLayer=L.Layer.extend({
+    onAdd(m){this._map=m;const pane=m.getPane('overlayPane');this._el=L.DomUtil.create('canvas','',pane);Object.assign(this._el.style,{position:'absolute',pointerEvents:'none',zIndex:300});m.on('moveend zoomend resize',this._reposition,this);this._reposition();this._tick=this._tick.bind(this);animFrame=requestAnimationFrame(this._tick)},
+    onRemove(m){m.off('moveend zoomend resize',this._reposition,this);if(animFrame){cancelAnimationFrame(animFrame);animFrame=null}L.DomUtil.remove(this._el)},
+    _reposition(){const sz=this._map.getSize();this._el.width=sz.x;this._el.height=sz.y;L.DomUtil.setPosition(this._el,this._map.containerPointToLayerPoint([0,0]))},
+    _tick(){
+      if(!this._map)return
+      progress=progress+SPEED
+      if(progress>=1){this._el.getContext('2d').clearRect(0,0,this._el.width,this._el.height);return}
+      const ctx=this._el.getContext('2d');ctx.clearRect(0,0,this._el.width,this._el.height)
+      const head=Math.floor(progress*total),tailStart=Math.max(0,head-Math.floor(TAIL*total))
+      for(let i=tailStart;i<head-1;i++){
+        const t=(i-tailStart)/(head-tailStart)
+        const p1=this._map.latLngToContainerPoint(path[i]),p2=this._map.latLngToContainerPoint(path[i+1])
+        ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y)
+        ctx.strokeStyle=color;ctx.lineWidth=4+t*4;ctx.globalAlpha=t*0.85;ctx.lineCap='round';ctx.stroke()
+      }
+      if(head<total){
+        const hp=this._map.latLngToContainerPoint(path[head])
+        ctx.beginPath();ctx.arc(hp.x,hp.y,10,0,Math.PI*2);ctx.fillStyle=color;ctx.globalAlpha=0.2;ctx.fill()
+        ctx.beginPath();ctx.arc(hp.x,hp.y,5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.globalAlpha=1;ctx.fill()
+        ctx.beginPath();ctx.arc(hp.x,hp.y,3.5,0,Math.PI*2);ctx.fillStyle=color;ctx.globalAlpha=1;ctx.fill()
+      }
+      ctx.globalAlpha=1
+      animFrame=requestAnimationFrame(this._tick)
+    }
+  })
+  animLayer=new AnimLayer();animLayer.addTo(map)
+}
+
+function stopAnimation(){
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null}
+  if(animLayer){map.removeLayer(animLayer);animLayer=null}
+}
+
+// ── 详情卡片 ──────────────────────────────
+function showIC(r){
+  const c=clr(r.type)
+  document.getElementById('ic').style.display='block'
+  document.getElementById('ic-n').textContent=r.name
+  document.getElementById('ic-type-lbl').textContent=lbl(r.type)
+  document.getElementById('ic-type-lbl').style.color=c
+  document.getElementById('ic-date').textContent=fDate(r.date)
+  ;[['ic-d',fD(r.dist)],['ic-t',fT(r.time)],['ic-p',fP(r.speed)+'/km'],['ic-e',r.ele+'m']].forEach(([id,v])=>{const e=document.getElementById(id);e.textContent=v;e.style.color=c})
+  document.getElementById('ic-speed').textContent=(r.speed*3.6).toFixed(1)+' km/h'
+  document.getElementById('ic-cal').textContent=Math.round(8*65*(r.time/3600))+' kcal'
+  startTrailAnimation(r,c)
+}
+
+// ── 侧边栏列表 ────────────────────────────
+function renderList(){
+  const q=document.getElementById('search').value.toLowerCase()
+  const fl=RUNS.filter(r=>r.name.toLowerCase().includes(q)||lbl(r.type).includes(q))
+  if(!fl.length){document.getElementById('rl').innerHTML=`<div style="padding:20px;color:#999;font-size:12px;text-align:center">${RUNS.length?'没有匹配':'暂无数据'}</div>`;return}
+  document.getElementById('rl').innerHTML=fl.map(r=>{
+    const isA=mode!=='compare'&&selected?.id===r.id,inC=compareIds.includes(r.id)
+    const c=clr(r.type),pct=Math.min(100,(r.dist/15000)*100)
+    return`<div class="ri${isA?' active':''}${inC?' csel':''}" onclick="clickRun(${r.id})">
+      <div class="rh"><span class="rd">${fDate(r.date)}</span><span class="rt" style="background:${c}22;color:${c}">${lbl(r.type)}</span></div>
+      <div class="rn">${r.name}</div>
+      <div class="rm">
+        <div><span class="mv">${fD(r.dist)}</span><span class="ml">距离</span></div>
+        <div><span class="mv">${fT(r.time)}</span><span class="ml">用时</span></div>
+        <div><span class="mv">${fP(r.speed)}</span><span class="ml">配速</span></div>
+        ${r.ele?`<div><span class="mv">${r.ele}m</span><span class="ml">爬升</span></div>`:''}
+      </div>
+      <div class="rb"><div style="height:100%;width:${pct}%;background:${c};opacity:.5;border-radius:1px"></div></div>
+    </div>`
+  }).join('')
+}
+
+// ── 对比面板 ──────────────────────────────
+function renderCompare(){
+  const[a,b]=compareIds.map(id=>RUNS.find(r=>r.id===id)).filter(Boolean)
+  const body=document.getElementById('cpb')
+  if(!a||!b){body.innerHTML=`<div style="padding:24px;color:#999;font-size:12px;text-align:center">选择两条路线对比<br><span style="font-size:10px;color:#ccc;margin-top:4px;display:block">已选 ${compareIds.length}/2</span></div>`;return}
+  const mx=[{l:'距离',av:fD(a.dist),bv:fD(b.dist),ar:a.dist,br:b.dist},{l:'用时',av:fT(a.time),bv:fT(b.time),ar:a.time,br:b.time,lb:1},{l:'配速',av:fP(a.speed),bv:fP(b.speed),ar:a.speed,br:b.speed},{l:'爬升',av:a.ele+'m',bv:b.ele+'m',ar:a.ele,br:b.ele}]
+  const aW=mx.filter(m=>m.lb?m.ar<m.br:m.ar>=m.br).length,win=aW>mx.length-aW?a:aW<mx.length-aW?b:null
+  body.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 12px;border-bottom:1px solid #f0f0f0">
+      ${[a,b].map((r,i)=>`<div style="background:#f8f8f8;border-radius:7px;padding:7px 9px;border-left:3px solid ${clr(r.type)};border-radius:0"><div style="font-size:9px;color:#999;margin-bottom:2px">路线 ${i?'B':'A'}</div><div style="font-size:11px;font-weight:600;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}</div><div style="font-size:9px;color:#999;margin-top:2px">${fDate(r.date)}</div></div>`).join('')}
+    </div>
+    <div style="padding:10px 14px">
+      ${mx.map(m=>{const aWin=m.lb?m.ar<=m.br:m.ar>=m.br,mx2=Math.max(m.ar,m.br)||1,aP=Math.round(m.ar/mx2*100),bP=Math.round(m.br/mx2*100);return`<div style="margin-bottom:12px"><div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${m.l}</div><div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;margin-bottom:4px"><div style="text-align:right;font-size:13px;font-weight:700;color:${aWin?'#16a34a':'#bbb'}">${m.av}</div><div style="font-size:9px;color:#ccc">vs</div><div style="font-size:13px;font-weight:700;color:${!aWin?'#2563eb':'#bbb'}">${m.bv}</div></div><div style="display:grid;grid-template-columns:1fr 4px 1fr;gap:3px"><div style="height:3px;background:#f0f0f0;border-radius:2px;overflow:hidden;display:flex;justify-content:flex-end"><div style="width:${aP}%;background:#16a34a;border-radius:2px"></div></div><div></div><div style="height:3px;background:#f0f0f0;border-radius:2px;overflow:hidden"><div style="width:${bP}%;background:#2563eb;border-radius:2px"></div></div></div></div>`}).join('')}
+    </div>
+    <div style="margin:0 12px 12px;background:#f8f8f8;border-radius:9px;padding:10px 12px;text-align:center">
+      ${win?`<div style="font-size:9px;color:#999;margin-bottom:3px">综合表现更佳</div><div style="font-size:12px;font-weight:600;color:${win.id===a.id?'#16a34a':'#2563eb'}">${win.name}</div>`:`<div style="font-size:12px;color:#999">势均力敌！</div>`}
+    </div>`
+}
+
+// ── 统计页 ────────────────────────────────
+function renderStats(){
+  if(!RUNS.length)return
+  const totD=RUNS.reduce((s,r)=>s+r.dist,0),totT=RUNS.reduce((s,r)=>s+r.time,0)
+  const avgS=RUNS.reduce((s,r)=>s+r.speed,0)/RUNS.length,maxD=Math.max(...RUNS.map(r=>r.dist))
+  document.getElementById('ssub').textContent=`共 ${RUNS.length} 次活动 · ${fD(totD)} · ${fT(totT)}`
+  document.getElementById('sg').innerHTML=[['总距离',fD(totD),'km'],['总时长',fT(totT),'时:分'],['平均配速',fP(avgS),'/ km'],['最长单次',fD(maxD),'km']].map(([l,v,s])=>`<div class="sk"><div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">${l}</div><div style="font-size:18px;font-weight:700;color:#16a34a;line-height:1">${v}</div><div style="font-size:9px;color:#bbb;margin-top:3px">${s}</div></div>`).join('')
+  const mm={};RUNS.forEach(r=>{const m=r.date.slice(0,7);mm[m]=(mm[m]||0)+r.dist/1000})
+  const months=Object.entries(mm).sort().slice(-12).map(([k,v])=>({m:k.slice(5)+'月',v:Math.round(v*10)/10}))
+  const maxM=Math.max(...months.map(x=>x.v),1)
+  document.getElementById('mc2').innerHTML=`<div style="display:flex;align-items:flex-end;gap:5px;height:90px">${months.map(x=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end"><span style="font-size:8px;color:#999">${x.v}</span><div style="width:100%;background:#16a34a;opacity:.7;height:${Math.max(3,(x.v/maxM)*65)}px;border-radius:3px 3px 0 0"></div><span style="font-size:8px;color:#bbb">${x.m}</span></div>`).join('')}</div>`
+  const sorted=[...RUNS].sort((a,b)=>new Date(a.date)-new Date(b.date))
+  const pcs=sorted.map(r=>r.speed?1000/r.speed/60:0).filter(p=>p>0&&p<15)
+  const cv=document.getElementById('pc'),c2=cv.getContext('2d'),PW=cv.width,PH=cv.height
+  c2.clearRect(0,0,PW,PH)
+  if(pcs.length>1){
+    const minP=Math.min(...pcs)*.96,maxP=Math.max(...pcs)*1.04,pd=8,iW=PW-pd*2,iH=PH-pd*2
+    ;[.25,.5,.75].forEach(t=>{c2.strokeStyle='#f0f0f0';c2.lineWidth=1;c2.beginPath();c2.moveTo(pd,pd+iH*t);c2.lineTo(PW-pd,pd+iH*t);c2.stroke()})
+    c2.beginPath();pcs.forEach((p3,i)=>{const x=pd+(i/(pcs.length-1))*iW,y=pd+((p3-minP)/(maxP-minP))*iH;i===0?c2.moveTo(x,y):c2.lineTo(x,y)});c2.strokeStyle='#16a34a';c2.lineWidth=1.5;c2.lineJoin='round';c2.stroke()
+    pcs.forEach((p3,i)=>{const x=pd+(i/(pcs.length-1))*iW,y=pd+((p3-minP)/(maxP-minP))*iH;c2.beginPath();c2.arc(x,y,2.5,0,Math.PI*2);c2.fillStyle='#16a34a';c2.fill()})
+  }
+  const tm={};RUNS.forEach(r=>tm[r.type]=(tm[r.type]||0)+1)
+  document.getElementById('tc2').innerHTML=Object.entries(tm).sort((a,b)=>b[1]-a[1]).map(([t,n])=>{const pct=Math.round(n/RUNS.length*100),c=clr(t);return`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:11px;color:#444">${lbl(t)}</span><span style="font-size:11px;color:#999">${n}次·${pct}%</span></div><div style="height:4px;background:#f0f0f0;border-radius:2px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${c};opacity:.7;border-radius:2px"></div></div></div>`}).join('')
+  const wd=['日','一','二','三','四','五','六'],wc2=Array(7).fill(0);RUNS.forEach(r=>wc2[new Date(r.date).getDay()]++)
+  const maxW=Math.max(...wc2,1)
+  document.getElementById('wc').innerHTML=`<div style="display:flex;align-items:flex-end;gap:5px;height:70px;padding-top:8px">${wd.map((d,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end"><div style="width:100%;background:${wc2[i]?'#16a34a':'#f0f0f0'};opacity:${wc2[i]?.4+wc2[i]/maxW*.6:1};height:${Math.max(3,(wc2[i]/maxW)*48)}px;border-radius:3px 3px 0 0"></div><span style="font-size:8px;color:#bbb">周${d}</span></div>`).join('')}</div>`
+}
+
+// ── 启动 ──────────────────────────────────
+;(async()=>{
+  // 读取 OAuth 回调带回的 username
+  const params=new URLSearchParams(window.location.search)
+  const uParam=params.get('u')
+  if(uParam) localStorage.setItem('kabi_username', uParam)
+
+  // 情况 1：URL 是 /username，访问某人的页面
+  if(PATH_USERNAME && PATH_USERNAME !== 'api'){
+    const myUsername=localStorage.getItem('kabi_username')
+    await initForUser(PATH_USERNAME, myUsername===PATH_USERNAME)
+    return
+  }
+
+  // 情况 2：已登录，跳到自己的页面
+  const username=localStorage.getItem('kabi_username')
+  if(username){
+    window.location.href='/'+username
+    return
+  }
+
+  // 情况 3：未登录
+  showLogin()
+})()
+</script>
+</body>
+</html>
