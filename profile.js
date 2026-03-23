@@ -1,6 +1,9 @@
-// api/profile.js
-// GET /api/profile?username=alice
-import { kv } from '@vercel/kv'
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+})
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -9,10 +12,10 @@ export default async function handler(req, res) {
   const { username } = req.query
   if (!username) return res.status(400).json({ error: 'username required' })
 
-  const user = await kv.get(`user:${username}`)
+  const raw = await redis.get(`user:${username}`)
+  const user = typeof raw === 'string' ? JSON.parse(raw) : raw
   if (!user) return res.status(404).json({ error: 'User not found' })
 
-  // 只返回公开信息，不返回 token
   return res.status(200).json({
     username: user.username,
     name: user.name,

@@ -1,5 +1,9 @@
-// api/token.js
-import { kv } from '@vercel/kv'
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+})
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -15,11 +19,13 @@ export default async function handler(req, res) {
 
   try {
     let body = { client_id: CLIENT_ID, client_secret: CLIENT_SECRET, grant_type }
+
     if (grant_type === 'authorization_code') {
       body.code = code
     } else if (grant_type === 'refresh_token') {
       if (username) {
-        const user = await kv.get(`user:${username}`)
+        const raw = await redis.get(`user:${username}`)
+        const user = typeof raw === 'string' ? JSON.parse(raw) : raw
         if (!user) return res.status(404).json({ error: 'User not found' })
         if (Date.now() < user.expires_at * 1000 - 60000) {
           return res.status(200).json({ access_token: user.access_token, expires_at: user.expires_at })
@@ -29,15 +35,27 @@ export default async function handler(req, res) {
         body.refresh_token = refresh_token
       }
     }
+
     const response = await fetch('https://www.strava.com/oauth/token', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     const data = await response.json()
+
     if (data.access_token && username) {
-      const user = await kv.get(`user:${username}`)
-      if (user) await kv.set(`user:${username}`, { ...user, access_token: data.access_token, refresh_token: data.refresh_token || user.refresh_token, expires_at: data.expires_at })
+      const raw = await redis.get(`user:${username}`)
+      const user = typeof raw === 'string' ? JSON.parse(raw) : raw
+      if (user) {
+        await redis.set(`user:${username}`, JSON.stringify({
+          ...user,
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || user.refresh_token,
+          expires_at: data.expires_at,
+        }))
+      }
     }
+
     return res.status(200).json(data)
   } catch (err) {
     return res.status(500).json({ error: 'Token failed', detail: err.message })
